@@ -106,7 +106,13 @@ venv.bak/
 #screenshot data
 *.png
 *.jpg
+*.jpeg
+*.webp
+*.gif
 *.tar
+*.sqlite3
+*.sqlite
+*.db
 
 #model files
 *.h5
@@ -115,8 +121,6 @@ venv.bak/
 *.txt
 results.html
 !requirements.txt
-!requirements-gpu.txt
-!tests/models/*
 !tests/data/*
 !docs/*
 logs/*

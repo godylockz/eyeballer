@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# -- coding: utf-8 --
+
+# Imports
 import os
 import random
 import sys
@@ -5,7 +9,7 @@ import progressbar
 
 # Prevent Tkinter Dependency
 import matplotlib
-matplotlib.use('agg')  # noqa: E402
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -39,9 +43,11 @@ class EyeballModel:
         weights_file -- A filename for where to load the model's weights.
         seed -- PRNG seed, useful for repeating a previous run and using the same data. Training/Validation split is determined randomly.
         """
-        # # Build the model
+        if weights_file is not None and not os.path.isfile(weights_file):
+            raise FileNotFoundError(weights_file)
         self.model = tf.keras.Sequential()
-        pretrained_layer = tf.keras.applications.mobilenet.MobileNet(weights='imagenet', include_top=False, input_shape=self.input_shape)
+        # Supplied weights include the backbone; prediction must work offline.
+        pretrained_layer = tf.keras.applications.mobilenet.MobileNet(weights=None if weights_file else 'imagenet', include_top=False, input_shape=self.input_shape)
         self.model.add(pretrained_layer)
         self.model.add(tf.keras.layers.GlobalAveragePooling2D())
         self.model.add(tf.keras.layers.Dense(256, activation="relu"))
@@ -54,16 +60,14 @@ class EyeballModel:
                            loss="binary_crossentropy",
                            metrics=["accuracy"])
 
-        if weights_file is not None and os.path.isfile(weights_file):
+        if weights_file is not None:
             try:
                 self.model.load_weights(weights_file)
             except OSError:
-                print("ERROR: Unable to open weights file '{}'".foramt(weights_file))
+                print("ERROR: Unable to open weights file '{}'".format(weights_file))
                 sys.exit(-1)
             print("Loaded model from file.")
         else:
-            if weights_file is not None:
-                raise FileNotFoundError
             print("WARN: No model loaded from file. Generating random model")
 
         if print_summary:
@@ -200,7 +204,7 @@ class EyeballModel:
         img = np.expand_dims(image, axis=0)
         img = preprocess_input(img)
 
-        prediction = self.model.predict(img, batch_size=1)
+        prediction = self.model.predict(img, batch_size=1, verbose=0)
         result = dict()
         result["filename"] = "custom-image"
         result["custom404"] = prediction[0][0]
@@ -221,7 +225,7 @@ class EyeballModel:
         if os.path.isfile(path):
             screenshots = [path]
         elif os.path.isdir(path):
-            screenshots = os.listdir(path)
+            screenshots = sorted(os.listdir(path))
             screenshots = [os.path.join(path, s) for s in screenshots]
         else:
             raise FileNotFoundError
@@ -245,7 +249,7 @@ class EyeballModel:
                 print("\nWARN: Skipping empty or corrupt file: ", screenshot)
                 continue
 
-            prediction = self.model.predict(img, batch_size=1)
+            prediction = self.model.predict(img, batch_size=1, verbose=0)
             result = dict()
             result["filename"] = screenshot
             result["custom404"] = prediction[0][0]

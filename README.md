@@ -42,21 +42,30 @@ Parked domains are websites that look real, but aren't valid attack surface. The
 
 ## Setup
 
-Download required packages on pip:
-```
-sudo pip3 install -r requirements.txt
-```
+Use Python 3.12 and an isolated environment. The Linux lock file pins all
+runtime dependencies and their hashes:
 
-Or if you want GPU support:
-```
-sudo pip3 install -r requirements-gpu.txt
+```sh
+uv venv --python 3.12 .venv
+uv pip sync --python .venv/bin/python --require-hashes requirements.lock
 ```
 
-**NOTE**: Setting up a GPU for use with TensorFlow is way beyond the scope of this README. There's hardware compatibility to consider, drivers to install... There's a lot. So you're just going to have to figure this part out on your own if you want a GPU. But at least from a Python package perspective, the above requirements file has you covered.
+Download the v3 pretrained weights from the [upstream release](https://github.com/BishopFox/eyeballer/releases/tag/3.0):
 
-**Pretrained Weights**
+```sh
+curl --proto '=https' --tlsv1.2 -fL -o bishop-fox-pretrained-v3.h5 \
+  https://github.com/BishopFox/eyeballer/releases/download/3.0/bishop-fox-pretrained-v3.h5
+printf '%s  %s\n' dd1c3741f6141f096a5ca6ee882df74bd5cb5b907c2df4b5548c4b02bd42afcd \
+  bishop-fox-pretrained-v3.h5 | sha256sum --check
+```
 
-For the latest pretrained weights, check out the releases here on GitHub.
+Prediction with supplied weights works offline. The tested install uses CPU;
+CUDA setup is outside this workflow. The obsolete `tensorflow-gpu` requirement
+has been removed. To refresh the lock after checking dependency advisories:
+
+```sh
+uv pip compile requirements.txt --python 3.12 --generate-hashes --output-file requirements.lock
+```
 
 **Training Data** You can find our training data here:
 
@@ -82,16 +91,40 @@ NOTE: For best results, make sure you screenshot your websites in a native 1.6x 
 To eyeball some screenshots, just run the "predict" mode:
 
 ```
-eyeballer.py --weights YOUR_WEIGHTS.h5 predict YOUR_FILE.png
+.venv/bin/python eyeballer.py --weights YOUR_WEIGHTS.h5 predict YOUR_FILE.png
 ```
 
 Or for a whole directory of files:
 
 ```
-eyeballer.py --weights YOUR_WEIGHTS.h5 predict PATH_TO/YOUR_FILES/
+.venv/bin/python eyeballer.py --weights YOUR_WEIGHTS.h5 predict PATH_TO/YOUR_FILES/ --output-dir ./eyeballer
 ```
 
 Eyeballer will spit the results back to you in human readable format (a `results.html` file so you can browse it easily) and machine readable format (a `results.csv` file).
+
+Both single-image and directory runs write `results.csv` and `results.html`.
+CSV filenames are absolute local paths; the HTML report uses local file links.
+Missing weights or an input with no readable images exits nonzero without
+writing new reports. Directory traversal is non-recursive. Keep each scan's
+reports with its screenshots; re-run predictions if the screenshot tree moves.
+
+For gowitness, classify its `shots/` or `screenshots/` directory after capture.
+Keep the gowitness database or JSONL export: image names alone do not reliably
+identify URLs. Join CSV `filename` to gowitness `file_name` (JSON) or `filename`
+(SQLite), resolved against the scan directory. Scores are independent values in
+[0, 1]; the default label cutoff is strictly greater than 0.5. These predictions
+help prioritize manual review and do not establish vulnerabilities or scope.
+
+## Tests
+
+```sh
+EYEBALLER_TEST_WEIGHTS="$PWD/bishop-fox-pretrained-v3.h5" \
+  .venv/bin/python -m unittest discover -s tests -v
+```
+
+CLI tests run without loading TensorFlow. Model tests use the explicitly supplied,
+checksum-verified v3 weights; without that variable they are reported as skipped.
+The old four-label test model is incompatible with the five-label network.
 
 ## Performance
 

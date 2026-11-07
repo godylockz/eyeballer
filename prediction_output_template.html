@@ -23,7 +23,7 @@
     </div>
     <button onclick="topFunction()" id="topBtn" title="Go to top">Top</button>
 <script>
-    var results = {{jsResults}};
+    var results = {{jsResults | tojson}};
     var selectedTags = new Array();
     var btnContainer = document.getElementById("btnsCont");
     var categoryBtns = btnContainer.getElementsByClassName("btn");
@@ -79,14 +79,25 @@
         pressedBtn.className += ' activePage';
     }
     function buildHTML(rangeMin, rangeMax){
-        var html = '';
+        var container = document.getElementById('container');
+        container.replaceChildren();
         if (rangeMax > indexesToDisplay.length) rangeMax=indexesToDisplay.length;
         for (var i = rangeMin; i < rangeMax; i++){
             index=indexesToDisplay[i];
             filename = Object.keys(results)[index];
-            html += ('<div class="filterDiv"><a href=' + filename + ' target="_blank"> ' + results[filename].toString().replace(/,/g, ' ') + '</a><img class="res_pic" src="' + filename + '"></div>');
+            var card = document.createElement('div');
+            card.className = 'filterDiv';
+            var link = document.createElement('a');
+            link.href = filename;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            link.textContent = results[filename].join(' ') || 'Unclassified';
+            var image = document.createElement('img');
+            image.className = 'res_pic';
+            image.src = filename;
+            card.append(link, image);
+            container.append(card);
         }
-        document.getElementById('container').innerHTML = html;
     }
     window.onscroll = function() {scrollFunction()};
     function scrollFunction() {

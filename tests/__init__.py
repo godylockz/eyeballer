@@ -1,1 +1,2 @@
-from tests.PredictTest import *  # noqa
+#!/usr/bin/env python3
+# -- coding: utf-8 --
