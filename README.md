@@ -128,7 +128,15 @@ reports with its screenshots; re-run predictions if the screenshot tree moves.
 For gowitness, classify its `shots/` or `screenshots/` directory after capture.
 Keep the gowitness database or JSONL export: image names alone do not reliably
 identify URLs. Join CSV `filename` to gowitness `file_name` (JSON) or `filename`
-(SQLite), resolved against the scan directory. Scores are independent values in
+(SQLite), resolved against the scan directory. Pass the SQLite database to add
+page titles and device type filters (printer, IP phone, hypervisor, and so on)
+to `results.html`; types come from page titles and the CSV is unchanged:
+
+```
+eyeballer predict gowitness/screenshots/ --gowitness gowitness/gowitness.sqlite3 --output-dir ./eyeballer
+```
+
+Scores are independent values in
 [0, 1]; the default label cutoff is strictly greater than 0.5. These predictions
 help prioritize manual review and do not establish vulnerabilities or scope.
 

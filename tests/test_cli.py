@@ -7,6 +7,7 @@
 import csv
 import os
 from pathlib import Path
+import sqlite3
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -58,6 +59,44 @@ class CLITest(unittest.TestCase):
         self.assertNotIn('var results = {\'', html)
         for label in LABELS:
             self.assertIn(f'data-tag="{label}" aria-pressed="false"', html)
+
+    def gowitness_db(self, rows):
+        database = self.root / "gowitness.sqlite3"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE results (id INTEGER PRIMARY KEY, filename TEXT, title TEXT, probed_at TEXT)")
+            connection.executemany("INSERT INTO results (filename, title, probed_at) VALUES (?, ?, ?)", rows)
+        connection.close()
+        return database
+
+    def test_gowitness_titles_add_device_filters(self):
+        database = self.gowitness_db([(self.shot.name, "Login - VMware ESXi", "2026-01-01"),
+                                      (self.shot.name, "HP Device Status", "2026-01-02"),
+                                      ("", "Unrelated", "2026-01-03")])
+        result = self.invoke("--gowitness", str(database))
+        self.assertEqual(result.exit_code, 0, result.output)
+        html = (self.output / "results.html").read_text()
+        self.assertIn('{"device": "Printer", "title": "HP Device Status"}', html)
+        self.assertNotIn("VMware", html)
+
+    def test_unreadable_gowitness_database_fails_before_model_construction(self):
+        database = self.root / "not-a-database.sqlite3"
+        database.write_text("not sqlite")
+        result = self.invoke("--gowitness", str(database))
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Cannot read gowitness results", result.output)
+        self.factory.assert_not_called()
+
+    def test_device_type_first_match_wins(self):
+        self.assertEqual(CLI.device_type("Machine Identification - BP-70M75"), "Printer")
+        self.assertEqual(CLI.device_type("VMware Horizon"), "Remote access")
+        self.assertEqual(CLI.device_type("Login - VMware ESXi"), "Hypervisor")
+        self.assertEqual(CLI.device_type("CP-8841-3PCC Configuration Utility"), "IP phone")
+        self.assertIsNone(CLI.device_type("IIS Windows Server"))
+
+    def test_report_without_gowitness_has_no_pages(self):
+        result = self.invoke()
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("var pages = {};", (self.output / "results.html").read_text())
 
     def test_multiple_images_preserve_scores(self):
         self.model.predict.return_value *= 2
