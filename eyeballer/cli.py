@@ -3,14 +3,56 @@
 
 # Imports
 import click
+from contextlib import contextmanager
 import csv
 import math
+import os
 from pathlib import Path
+import sys
+import tempfile
 
 from jinja2 import Template
 
 # Installers place the released v3 weights here so predict works without --weights.
 DEFAULT_WEIGHTS = Path(__file__).with_name("bishop-fox-pretrained-v3.h5")
+
+
+@contextmanager
+def quiet_native_stderr():
+    """Hide TensorFlow's native startup logs, replaying them if loading fails.
+
+    TensorFlow writes CUDA probing and oneDNN notices to file descriptor 2
+    before its logger honours TF_CPP_MIN_LOG_LEVEL, so a level alone cannot
+    silence them. Setting TF_CPP_MIN_LOG_LEVEL disables this capture.
+    """
+    if "TF_CPP_MIN_LOG_LEVEL" in os.environ:
+        yield
+        return
+    sys.stderr.flush()
+    saved = os.dup(2)
+    try:
+        with tempfile.TemporaryFile() as log:
+            os.dup2(log.fileno(), 2)
+            try:
+                yield
+            except BaseException:
+                sys.stderr.flush()
+                os.dup2(saved, 2)
+                log.seek(0)
+                with os.fdopen(os.dup(2), "wb") as stream:
+                    stream.write(log.read())
+                raise
+            finally:
+                sys.stderr.flush()
+                os.dup2(saved, 2)
+    finally:
+        os.close(saved)
+
+
+def load_model(model_kwargs):
+    with quiet_native_stderr():
+        from eyeballer.model import EyeballModel
+        return EyeballModel(**model_kwargs)
 
 
 @click.group(invoke_without_command=True)
@@ -36,8 +78,7 @@ def cli(ctx, weights, summary, seed):
 @click.option('--batchsize', default=32, type=int, help="Batch size")  # TODO better help string
 @click.pass_context
 def train(ctx, graphs, batchsize, epochs):
-    from eyeballer.model import EyeballModel
-    model = EyeballModel(**ctx.obj['model_kwargs'])
+    model = load_model(ctx.obj['model_kwargs'])
     model.train(print_graphs=graphs, batch_size=batchsize, epochs=epochs)
 
 
@@ -56,8 +97,8 @@ def predict(ctx, screenshot, heatmap, threshold, output_dir):
     ctx.obj['model_kwargs']['weights_file'] = str(weights)
     if heatmap and not screenshot.is_file():
         raise click.ClickException("--heatmap requires a single image")
-    from eyeballer.model import EyeballModel, DATA_LABELS
-    model = EyeballModel(**ctx.obj['model_kwargs'])
+    model = load_model(ctx.obj['model_kwargs'])
+    from eyeballer.model import DATA_LABELS
     results = model.predict(str(screenshot.resolve()))
 
     if not results:
@@ -131,8 +172,7 @@ def pretty_print_evaluation(results):
 @click.option('--threshold', default=.5, type=float, help="Threshold confidence for labeling")
 @click.pass_context
 def evaluate(ctx, threshold):
-    from eyeballer.model import EyeballModel
-    model = EyeballModel(**ctx.obj['model_kwargs'])
+    model = load_model(ctx.obj['model_kwargs'])
     results = model.evaluate(threshold)
     pretty_print_evaluation(results)
 

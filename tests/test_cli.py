@@ -5,6 +5,7 @@
 
 # Imports
 import csv
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -41,8 +42,11 @@ class CLITest(unittest.TestCase):
                                              "--output-dir", str(self.output), *extra])
 
     def test_single_image_reports_from_another_working_directory(self):
-        with self.runner.isolated_filesystem():
-            result = self.invoke()
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(elsewhere)
+        result = self.invoke()
         self.assertEqual(result.exit_code, 0, result.output)
         with (self.output / "results.csv").open(newline="") as stream:
             rows = list(csv.DictReader(stream))
@@ -88,6 +92,34 @@ class CLITest(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("absent.h5 not found", result.output)
         self.factory.assert_not_called()
+
+    def native_stderr(self, message, fail=False):
+        sink = self.root / "stderr"
+        saved = os.dup(2)
+        try:
+            with sink.open("wb") as stream:
+                os.dup2(stream.fileno(), 2)
+            try:
+                with CLI.quiet_native_stderr():
+                    os.write(2, message)
+                    if fail:
+                        raise RuntimeError
+            except RuntimeError:
+                pass
+        finally:
+            os.dup2(saved, 2)
+            os.close(saved)
+        return sink.read_bytes()
+
+    def test_native_startup_logs_hidden_unless_loading_fails(self):
+        with patch.dict(os.environ):
+            os.environ.pop("TF_CPP_MIN_LOG_LEVEL", None)
+            self.assertEqual(self.native_stderr(b"cuda probe\n"), b"")
+            self.assertEqual(self.native_stderr(b"load failure\n", fail=True), b"load failure\n")
+
+    def test_tf_log_level_disables_native_capture(self):
+        with patch.dict(os.environ, {"TF_CPP_MIN_LOG_LEVEL": "0"}):
+            self.assertEqual(self.native_stderr(b"cuda probe\n"), b"cuda probe\n")
 
     def test_help_does_not_load_model(self):
         result = self.runner.invoke(CLI.cli, ["--help"])

@@ -74,8 +74,10 @@ python3.12 -m venv .venv
 .venv/bin/pip install --no-deps --editable .
 ```
 
-The tested install uses CPU; CUDA setup is outside this workflow. To refresh
-the lock after checking dependency advisories:
+The tested install uses CPU; CUDA setup is outside this workflow. TensorFlow's
+startup logs are hidden while the model loads and printed if loading fails;
+set `TF_CPP_MIN_LOG_LEVEL` (for example `0`) to see them, such as when setting
+up CUDA. To refresh the lock after checking dependency advisories:
 
 ```sh
 uv pip compile pyproject.toml --python-version 3.12 --python-platform x86_64-manylinux_2_28 \
