@@ -56,6 +56,8 @@ class CLITest(unittest.TestCase):
         self.assertIn("%22quoted%22", html)
         self.assertIn("link.textContent", html)
         self.assertNotIn('var results = {\'', html)
+        for label in LABELS:
+            self.assertIn(f'data-tag="{label}" aria-pressed="false"', html)
 
     def test_multiple_images_preserve_scores(self):
         self.model.predict.return_value *= 2
