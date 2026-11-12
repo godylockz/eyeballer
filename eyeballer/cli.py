@@ -9,9 +9,12 @@ from pathlib import Path
 
 from jinja2 import Template
 
+# Installers place the released v3 weights here so predict works without --weights.
+DEFAULT_WEIGHTS = Path(__file__).with_name("bishop-fox-pretrained-v3.h5")
+
 
 @click.group(invoke_without_command=True)
-@click.option('--weights', default=None, type=click.Path(), help="Weights file for input/output")
+@click.option('--weights', default=None, type=click.Path(), help="Weights file for input/output; predict defaults to the bundled v3 weights")
 @click.option('--summary/--no-summary', default=False, help="Print model summary at start")
 @click.option('--seed', default=None, type=int, help="RNG seed for data shuffling and transformations, defaults to random value")
 @click.pass_context
@@ -47,9 +50,10 @@ def train(ctx, graphs, batchsize, epochs):
 def predict(ctx, screenshot, heatmap, threshold, output_dir):
     if not math.isfinite(threshold):
         raise click.BadParameter("must be a finite value between 0 and 1", param_hint="--threshold")
-    weights = ctx.obj['model_kwargs']['weights_file']
-    if not weights or not Path(weights).is_file():
-        raise click.ClickException("Prediction requires --weights pointing to a pretrained weights file")
+    weights = Path(ctx.obj['model_kwargs']['weights_file'] or DEFAULT_WEIGHTS)
+    if not weights.is_file():
+        raise click.ClickException(f"Prediction requires a pretrained weights file; {weights} not found")
+    ctx.obj['model_kwargs']['weights_file'] = str(weights)
     if heatmap and not screenshot.is_file():
         raise click.ClickException("--heatmap requires a single image")
     from eyeballer.model import EyeballModel, DATA_LABELS

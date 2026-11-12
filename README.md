@@ -42,29 +42,44 @@ Parked domains are websites that look real, but aren't valid attack surface. The
 
 ## Setup
 
-Use Python 3.12 and an isolated environment. The Linux lock file pins all
-runtime dependencies and their hashes:
+Eyeballer needs CPython 3.10 through 3.13 (TensorFlow 2.21 has no newer
+wheels). `requirements.lock` pins every runtime dependency and its hashes.
+
+Download the v3 pretrained weights from the [upstream release](https://github.com/BishopFox/eyeballer/releases/tag/3.0)
+into the package directory. Installs bundle them, so `predict` works offline
+without `--weights`:
 
 ```sh
-uv venv --python 3.12 .venv
-uv pip sync --python .venv/bin/python --require-hashes requirements.lock
-```
-
-Download the v3 pretrained weights from the [upstream release](https://github.com/BishopFox/eyeballer/releases/tag/3.0):
-
-```sh
-curl --proto '=https' --tlsv1.2 -fL -o bishop-fox-pretrained-v3.h5 \
+curl --proto '=https' --tlsv1.2 -fL -o eyeballer/bishop-fox-pretrained-v3.h5 \
   https://github.com/BishopFox/eyeballer/releases/download/3.0/bishop-fox-pretrained-v3.h5
 printf '%s  %s\n' dd1c3741f6141f096a5ca6ee882df74bd5cb5b907c2df4b5548c4b02bd42afcd \
-  bishop-fox-pretrained-v3.h5 | sha256sum --check
+  eyeballer/bishop-fox-pretrained-v3.h5 | sha256sum --check
 ```
 
-Prediction with supplied weights works offline. The tested install uses CPU;
-CUDA setup is outside this workflow. The obsolete `tensorflow-gpu` requirement
-has been removed. To refresh the lock after checking dependency advisories:
+Install the `eyeballer` command with pipx, pinned to the lock's versions. Hashed
+constraints switch pip into hash-checking mode, which rejects the local
+directory, so pass version-only constraints:
 
 ```sh
-uv pip compile requirements.txt --python 3.12 --generate-hashes --output-file requirements.lock
+sed -nE 's/^([A-Za-z0-9][A-Za-z0-9._-]*==[^ ]+).*/\1/p' requirements.lock >constraints.txt
+pipx install . --python 3.12 --fetch-python=missing --backend pip \
+  --pip-args="--constraint=$PWD/constraints.txt"
+```
+
+For development, use a Python 3.12 virtual environment:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/pip install --require-hashes -r requirements.lock
+.venv/bin/pip install --no-deps --editable .
+```
+
+The tested install uses CPU; CUDA setup is outside this workflow. To refresh
+the lock after checking dependency advisories:
+
+```sh
+uv pip compile pyproject.toml --python-version 3.12 --python-platform x86_64-manylinux_2_28 \
+  --generate-hashes --output-file requirements.lock
 ```
 
 **Training Data** You can find our training data here:
@@ -91,13 +106,13 @@ NOTE: For best results, make sure you screenshot your websites in a native 1.6x 
 To eyeball some screenshots, just run the "predict" mode:
 
 ```
-.venv/bin/python eyeballer.py --weights YOUR_WEIGHTS.h5 predict YOUR_FILE.png
+eyeballer predict YOUR_FILE.png
 ```
 
-Or for a whole directory of files:
+Pass `--weights YOUR_WEIGHTS.h5` before `predict` to use other weights. For a whole directory of files:
 
 ```
-.venv/bin/python eyeballer.py --weights YOUR_WEIGHTS.h5 predict PATH_TO/YOUR_FILES/ --output-dir ./eyeballer
+eyeballer predict PATH_TO/YOUR_FILES/ --output-dir ./eyeballer
 ```
 
 Eyeballer will spit the results back to you in human readable format (a `results.html` file so you can browse it easily) and machine readable format (a `results.csv` file).
@@ -118,7 +133,7 @@ help prioritize manual review and do not establish vulnerabilities or scope.
 ## Tests
 
 ```sh
-EYEBALLER_TEST_WEIGHTS="$PWD/bishop-fox-pretrained-v3.h5" \
+EYEBALLER_TEST_WEIGHTS="$PWD/eyeballer/bishop-fox-pretrained-v3.h5" \
   .venv/bin/python -m unittest discover -s tests -v
 ```
 
@@ -151,7 +166,7 @@ For a detailed explanation on [Precision vs Recall, check out Wikipedia](https:/
 ## Training
 To train a new model, run:
 ```
-eyeballer.py train
+eyeballer train
 ```
 
 You'll want a machine with a good GPU for this to run in a reasonable amount of time. Setting that up is outside the scope of this readme, however.
@@ -163,7 +178,7 @@ This will output a new model file (weights.h5 by default).
 You just trained a new model, cool! Let's see how well it performs against some images it's never seen before, across a variety of metrics:
 
 ```
-eyeballer.py --weights YOUR_WEIGHTS.h5 evaluate
+eyeballer --weights YOUR_WEIGHTS.h5 evaluate
 ```
 
 The output will describe the model's accuracy in both recall and precision for each of the program's labels. (Including "none of the above" as a pseudo-label)

@@ -6,7 +6,6 @@
 # Imports
 import csv
 from pathlib import Path
-import runpy
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -15,7 +14,7 @@ from unittest.mock import Mock, patch
 
 from click.testing import CliRunner
 
-CLI = runpy.run_path(str(Path(__file__).resolve().parents[1] / "eyeballer.py"))
+from eyeballer import cli as CLI
 LABELS = ["custom404", "login", "webapp", "oldlooking", "parked"]
 
 
@@ -38,7 +37,7 @@ class CLITest(unittest.TestCase):
         self.addCleanup(modules.stop)
 
     def invoke(self, *extra):
-        return self.runner.invoke(CLI["cli"], ["--weights", str(self.weights), "predict", str(self.shot),
+        return self.runner.invoke(CLI.cli, ["--weights", str(self.weights), "predict", str(self.shot),
                                              "--output-dir", str(self.output), *extra])
 
     def test_single_image_reports_from_another_working_directory(self):
@@ -77,21 +76,34 @@ class CLITest(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.factory.assert_not_called()
 
+    def test_predict_defaults_to_bundled_weights(self):
+        with patch.object(CLI, "DEFAULT_WEIGHTS", self.weights):
+            result = self.runner.invoke(CLI.cli, ["predict", str(self.shot), "--output-dir", str(self.output)])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(self.factory.call_args.kwargs["weights_file"], str(self.weights))
+
+    def test_missing_bundled_weights_fail_before_model_construction(self):
+        with patch.object(CLI, "DEFAULT_WEIGHTS", self.root / "absent.h5"):
+            result = self.runner.invoke(CLI.cli, ["predict", str(self.shot)])
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("absent.h5 not found", result.output)
+        self.factory.assert_not_called()
+
     def test_help_does_not_load_model(self):
-        result = self.runner.invoke(CLI["cli"], ["--help"])
+        result = self.runner.invoke(CLI.cli, ["--help"])
         self.assertEqual(result.exit_code, 0)
         self.factory.assert_not_called()
 
     def test_invalid_threshold_and_directory_heatmap(self):
         for threshold in ("1.1", "nan", "inf", "-0.1"):
             self.assertNotEqual(self.invoke("--threshold", threshold).exit_code, 0)
-        result = self.runner.invoke(CLI["cli"], ["--weights", str(self.weights), "predict", str(self.root), "--heatmap"])
+        result = self.runner.invoke(CLI.cli, ["--weights", str(self.weights), "predict", str(self.root), "--heatmap"])
         self.assertNotEqual(result.exit_code, 0)
         self.factory.assert_not_called()
 
     def test_script_tag_cannot_escape_report_data(self):
         output = self.root / "hostile.html"
-        CLI["buildHTML"]({'</script><script>alert(1)</script>': []}, output)
+        CLI.buildHTML({'</script><script>alert(1)</script>': []}, output)
         self.assertNotIn('</script><script>alert(1)</script>', output.read_text())
 
 

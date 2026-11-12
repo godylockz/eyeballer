@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eyeballer"
+version = "3.0.0"
+description = "Classify web screenshots for penetration test triage"
+readme = "README.md"
+license = { file = "LICENSE" }
+# TensorFlow 2.21 publishes wheels for CPython 3.10 through 3.13.
+requires-python = ">=3.10,<3.14"
+# requirements.lock pins these and their dependencies with hashes.
+dependencies = [
+    "Augmentor",
+    "click",
+    "jinja2",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pillow",
+    "progressbar2",
+    "scikit-learn",
+    "scipy",
+    "tensorflow",
+]
+
+[project.scripts]
+eyeballer = "eyeballer.cli:cli"
+
+[tool.setuptools]
+packages = ["eyeballer"]
+
+[tool.setuptools.package-data]
+eyeballer = ["prediction_output_template.html", "bishop-fox-pretrained-v3.h5"]

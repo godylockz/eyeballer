@@ -120,7 +120,6 @@ venv.bak/
 *.csv
 *.txt
 results.html
-!requirements.txt
 !tests/data/*
 !docs/*
 logs/*
